@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Environment variables (HASSAS BİLGİLER!)
+.env
+
+# Database
+*.db
+
+# Logs
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - HunterRock GO</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css?v=<%= Date.now() %>">
+</head>
+
+<body>
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-link"></i>
+                    <span>HR GO</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/hradmin" class="nav-item <%= page === 'overview' ? 'active' : '' %>">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Genel Bakış</span>
+                </a>
+                <a href="/hradmin/links" class="nav-item <%= page === 'links' ? 'active' : '' %>">
+                    <i class="fas fa-link"></i>
+                    <span>Linkler</span>
+                </a>
+                <% if (typeof userRole !=='undefined' && userRole==='admin' ) { %>
+                    <a href="/hradmin/users" class="nav-item <%= page === 'users' ? 'active' : '' %>">
+                        <i class="fas fa-users"></i>
+                        <span>Kullanıcılar</span>
+                    </a>
+                    <a href="/hradmin/logs" class="nav-item <%= page === 'logs' ? 'active' : '' %>">
+                        <i class="fas fa-history"></i>
+                        <span>Loglar</span>
+                    </a>
+                    <a href="/hradmin/settings" class="nav-item <%= page === 'settings' ? 'active' : '' %>">
+                        <i class="fas fa-cog"></i>
+                        <span>Ayarlar</span>
+                    </a>
+                    <% } %>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="/hradmin/logout" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Çıkış Yap</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <% if (success) { %>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <%= success %>
+                </div>
+                <% } %>
+                    <% if (error) { %>
+                        <div class="alert alert-error">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <%= error %>
+                        </div>
+                        <% } %>
+
+                            <% if (page==='overview' ) { %>
+                                <!-- Overview Page -->
+                                <div class="page-header">
+                                    <h1>Genel Bakış</h1>
+                                    <p>Link istatistiklerinize göz atın</p>
+                                </div>
+
+                                <div class="stats-grid">
+                                    <div class="stat-card">
+                                        <div class="stat-icon blue">
+                                            <i class="fas fa-link"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3>
+                                                <%= stats.linkCount %>
+                                            </h3>
+                                            <p>Toplam Link</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon green">
+                                            <i class="fas fa-mouse-pointer"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3>
+                                                <%= stats.totalClicks %>
+                                            </h3>
+                                            <p>Toplam Tıklama</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon purple">
+                                            <i class="fas fa-fire"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3>
+                                                <%= stats.topLinks.length> 0 ? '/' + stats.topLinks[0].slug : '-' %>
+                                            </h3>
+                                            <p>En Popüler Link</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h2><i class="fas fa-trophy"></i> En Çok Tıklanan Linkler</h2>
+                                    </div>
+                                    <div class="card-body">
+                                        <% if (stats.topLinks.length> 0) { %>
+                                            <table class="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Link</th>
+                                                        <th>Tıklama</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <% stats.topLinks.forEach((link, index)=> { %>
+                                                        <tr>
+                                                            <td>
+                                                                <%= index + 1 %>
+                                                            </td>
+                                                            <td><span class="link-slug">/<%= link.slug %></span></td>
+                                                            <td><span class="link-clicks"><i
+                                                                        class="fas fa-mouse-pointer"></i>
+                                                                    <%= link.clicks %>
+                                                                </span></td>
+                                                        </tr>
+                                                        <% }); %>
+                                                </tbody>
+                                            </table>
+                                            <% } else { %>
+                                                <p class="empty-state"><i class="fas fa-link"></i><br>Henüz link
+                                                    eklenmemiş</p>
+                                                <% } %>
+                                    </div>
+                                </div>
+
+                                <% } else if (page==='links' ) { %>
+                                    <!-- Links Page -->
+                                    <div class="page-header">
+                                        <div>
+                                            <h1>Linkler</h1>
+                                            <p>Tüm kısa linklerinizi <% if (userRole==='admin' ) { %>yönetin<% } else {
+                                                        %>görüntüleyin<% } %>
+                                            </p>
+                                        </div>
+                                        <% if (userRole==='admin' ) { %>
+                                            <button class="btn-create"
+                                                onclick="document.getElementById('addLinkModal').classList.add('active')">
+                                                <i class="fas fa-plus"></i>
+                                                Yeni Link
+                                            </button>
+                                            <% } %>
+                                    </div>
+
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <% if (links.length> 0) { %>
+                                                <div class="table-container">
+                                                    <table class="data-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Kısa Link</th>
+                                                                <th>Hedef URL</th>
+                                                                <th>Tıklama</th>
+                                                                <th>Oluşturulma</th>
+                                                                <th>İşlemler</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <% links.forEach(link=> { %>
+                                                                <tr>
+                                                                    <td>
+                                                                        <span class="link-slug">
+                                                                            <i class="fas fa-link"></i>
+                                                                            /<%= link.slug %>
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="link-target"
+                                                                            title="<%= link.target_url %>">
+                                                                            <%= link.target_url %>
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="link-clicks">
+                                                                            <i class="fas fa-mouse-pointer"></i>
+                                                                            <%= link.clicks %>
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <span class="link-date">
+                                                                            <%= new
+                                                                                Date(link.created_at).toLocaleDateString('tr-TR')
+                                                                                %>
+                                                                        </span>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div class="actions-cell">
+                                                                            <button class="btn-icon view"
+                                                                                onclick="openLogModal(<%= link.id %>, '<%= link.slug %>')"
+                                                                                title="Logları Gör">
+                                                                                <i class="fas fa-eye"></i>
+                                                                            </button>
+                                                                            <button class="btn-icon copy"
+                                                                                onclick="copyLink('<%= link.slug %>')"
+                                                                                title="Kopyala">
+                                                                                <i class="fas fa-copy"></i>
+                                                                            </button>
+                                                                            <% if (userRole==='admin' ) { %>
+                                                                                <button
+                                                                                    class="btn-icon edit edit-link-btn"
+                                                                                    data-id="<%= link.id %>"
+                                                                                    data-slug="<%- encodeURIComponent(link.slug) %>"
+                                                                                    data-url="<%- encodeURIComponent(link.target_url) %>"
+                                                                                    data-title="<%- encodeURIComponent(link.title || '') %>"
+                                                                                    title="Düzenle">
+                                                                                    <i class="fas fa-edit"></i>
+                                                                                </button>
+                                                                                <form
+                                                                                    action="/hradmin/links/<%= link.id %>/delete"
+                                                                                    method="POST" style="display:inline"
+                                                                                    onsubmit="return confirm('Bu linki silmek istediğinize emin misiniz?')">
+                                                                                    <button type="submit"
+                                                                                        class="btn-icon delete"
+                                                                                        title="Sil">
+                                                                                        <i class="fas fa-trash"></i>
+                                                                                    </button>
+                                                                                </form>
+                                                                                <% } %>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                                <% }); %>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <% } else { %>
+                                                    <p class="empty-state"><i class="fas fa-link"></i><br>Henüz link
+                                                        eklenmemiş</p>
+                                                    <% } %>
+                                        </div>
+                                    </div>
+
+                                    <!-- Add Link Modal -->
+                                    <div id="addLinkModal" class="modal-overlay">
+                                        <div class="modal">
+                                            <div class="modal-header">
+                                                <h2>Yeni Link Ekle</h2>
+                                                <button class="modal-close"
+                                                    onclick="document.getElementById('addLinkModal').classList.remove('active')">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                            <form action="/hradmin/links" method="POST" class="modal-body">
+                                                <div class="form-group">
+                                                    <label for="slug">Kısa İsim</label>
+                                                    <div class="input-with-prefix">
+                                                        <span class="prefix">go.hunterrockmedya.com/</span>
+                                                        <input type="text" name="slug" id="slug" placeholder="ornek"
+                                                            required>
+                                                    </div>
+                                                    <small>Sadece harf, rakam, tire ve alt çizgi kullanın</small>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="title">Başlık (Opsiyonel)</label>
+                                                    <input type="text" name="title" id="title"
+                                                        placeholder="Link açıklaması">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="targetUrl">Hedef URL</label>
+                                                    <input type="url" name="targetUrl" id="targetUrl"
+                                                        placeholder="https://example.com" required>
+                                                </div>
+                                                <div class="modal-actions">
+                                                    <button type="button" class="btn-secondary"
+                                                        onclick="document.getElementById('addLinkModal').classList.remove('active')">İptal</button>
+                                                    <button type="submit" class="btn-primary">
+                                                        <i class="fas fa-save"></i>
+                                                        Kaydet
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+
+                                    <!-- Log Modal -->
+                                    <div id="logModal" class="modal-overlay">
+                                        <div class="modal modal-lg">
+                                            <div class="modal-header">
+                                                <h2><i class="fas fa-chart-line"></i> <span id="logModalTitle">Link
+                                                        Logları</span></h2>
+                                                <button class="modal-close" onclick="closeLogModal()">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body" id="logModalBody">
+                                                <div class="log-loading">
+                                                    <i class="fas fa-spinner fa-spin"></i> Yükleniyor...
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Edit Link Modal -->
+                                    <div id="editLinkModal" class="modal-overlay">
+                                        <div class="modal">
+                                            <div class="modal-header">
+                                                <h2><i class="fas fa-edit"></i> Link Düzenle</h2>
+                                                <button class="modal-close" onclick="closeEditModal()">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                            <form id="editLinkForm" method="POST" class="modal-body">
+                                                <input type="hidden" id="editLinkId" name="linkId">
+                                                <div class="form-group">
+                                                    <label for="editSlug">Kısa İsim</label>
+                                                    <div class="input-with-prefix">
+                                                        <span class="prefix">go.hunterrockmedya.com/</span>
+                                                        <input type="text" name="slug" id="editSlug" required>
+                                                    </div>
+                                                    <small>Sadece harf, rakam, tire ve alt çizgi kullanın</small>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="editTitle">Başlık (Opsiyonel)</label>
+                                                    <input type="text" name="title" id="editTitle"
+                                                        placeholder="Link açıklaması">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="editTargetUrl">Hedef URL</label>
+                                                    <input type="url" name="targetUrl" id="editTargetUrl"
+                                                        placeholder="https://example.com" required>
+                                                </div>
+                                                <div class="modal-actions">
+                                                    <button type="button" class="btn-secondary"
+                                                        onclick="closeEditModal()">İptal</button>
+                                                    <button type="submit" class="btn-primary">
+                                                        <i class="fas fa-save"></i>
+                                                        Güncelle
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+
+                                    <% } else if (page==='users' ) { %>
+                                        <!-- Users Page -->
+                                        <div class="page-header">
+                                            <h1>Kullanıcılar</h1>
+                                            <p>Sistem kullanıcılarını yönetin</p>
+                                        </div>
+
+                                        <!-- Yeni Kullanıcı Oluştur -->
+                                        <div class="card" style="margin-bottom: 24px;">
+                                            <div class="card-header">
+                                                <h2><i class="fas fa-user-plus"></i> Yeni Kullanıcı</h2>
+                                            </div>
+                                            <form action="/hradmin/users/create" method="POST" class="card-body">
+                                                <div class="form-row">
+                                                    <div class="form-group">
+                                                        <label>Kullanıcı Adı</label>
+                                                        <input type="text" name="username" placeholder="min. 3 karakter"
+                                                            required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Şifre</label>
+                                                        <input type="password" name="password"
+                                                            placeholder="min. 8 karakter" required>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label>Rol</label>
+                                                        <select name="role">
+                                                            <option value="user" selected>User</option>
+                                                            <option value="admin">Admin</option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="submit" class="btn-create">
+                                                        <i class="fas fa-plus"></i> Oluştur
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+
+                                        <!-- Kullanıcı Listesi -->
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h2><i class="fas fa-users"></i> Mevcut Kullanıcılar (<%= users.length
+                                                        %>)</h2>
+                                            </div>
+                                            <div class="table-container">
+                                                <% if (users && users.length> 0) { %>
+                                                    <table class="data-table users-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Kullanıcı Adı</th>
+                                                                <th>Rol</th>
+                                                                <th>Oluşturulma</th>
+                                                                <th>Son Giriş</th>
+                                                                <th>İşlemler</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <% users.forEach(user=> { %>
+                                                                <tr>
+                                                                    <td>
+                                                                        <strong>
+                                                                            <%= user.username %>
+                                                                        </strong>
+                                                                        <% if (user.id===currentUserId) { %>
+                                                                            <span class="badge">Siz</span>
+                                                                            <% } %>
+                                                                    </td>
+                                                                    <td><span class="role-badge <%= user.role %>">
+                                                                            <i
+                                                                                class="fas fa-<%= user.role === 'admin' ? 'shield-alt' : 'user' %>"></i>
+                                                                            <%= user.role %>
+                                                                        </span></td>
+                                                                    <td>
+                                                                        <%= new
+                                                                            Date(user.created_at).toLocaleDateString('tr-TR')
+                                                                            %>
+                                                                    </td>
+                                                                    <td>
+                                                                        <%= user.last_login ? new
+                                                                            Date(user.last_login).toLocaleString('tr-TR')
+                                                                            : 'Hiç' %>
+                                                                    </td>
+                                                                    <td>
+                                                                        <div class="actions-cell">
+                                                                            <button class="btn-icon edit password-btn"
+                                                                                data-id="<%= user.id %>"
+                                                                                data-username="<%= user.username %>"
+                                                                                title="Şifre Değiştir">
+                                                                                <i class="fas fa-key"></i>
+                                                                            </button>
+                                                                            <% if (user.id !==currentUserId) { %>
+                                                                                <form
+                                                                                    action="/hradmin/users/<%= user.id %>/delete"
+                                                                                    method="POST" style="display:inline"
+                                                                                    onsubmit="return confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')">
+                                                                                    <button type="submit"
+                                                                                        class="btn-icon delete"
+                                                                                        title="Sil">
+                                                                                        <i class="fas fa-trash"></i>
+                                                                                    </button>
+                                                                                </form>
+                                                                                <% } %>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                                <% }); %>
+                                                        </tbody>
+                                                    </table>
+                                                    <% } else { %>
+                                                        <p class="empty-state"><i class="fas fa-users"></i><br>Henüz
+                                                            kullanıcı yok</p>
+                                                        <% } %>
+                                            </div>
+                                        </div>
+
+                                        <!-- Şifre Değiştir Modal -->
+                                        <div id="passwordModal" class="modal-overlay">
+                                            <div class="modal">
+                                                <div class="modal-header">
+                                                    <h2><i class="fas fa-key"></i> Şifre Değiştir</h2>
+                                                    <button class="modal-close" onclick="closePasswordModal()">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                                <form id="passwordForm" method="POST" class="modal-body">
+                                                    <p id="passwordModalUser"></p>
+                                                    <div class="form-group">
+                                                        <label>Yeni Şifre</label>
+                                                        <input type="password" name="newPassword"
+                                                            placeholder="min. 8 karakter" required>
+                                                    </div>
+                                                    <div class="modal-actions">
+                                                        <button type="button" class="btn-secondary"
+                                                            onclick="closePasswordModal()">İptal</button>
+                                                        <button type="submit" class="btn-primary">
+                                                            <i class="fas fa-save"></i> Kaydet
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+
+                                        <% } else if (page==='logs' ) { %>
+                                            <!-- Logs Page -->
+                                            <div class="page-header">
+                                                <h1>Sistem Logları</h1>
+                                                <p>Tüm sistem aktivitelerini izleyin</p>
+                                            </div>
+
+                                            <!-- İstatistikler -->
+                                            <div class="log-stats-grid">
+                                                <div class="log-stat-card">
+                                                    <div class="log-stat-icon click">
+                                                        <i class="fas fa-mouse-pointer"></i>
+                                                    </div>
+                                                    <div class="log-stat-info">
+                                                        <span class="log-stat-value">
+                                                            <%= stats.totalClicks %>
+                                                        </span>
+                                                        <span class="log-stat-label">Toplam Tıklama</span>
+                                                    </div>
+                                                </div>
+                                                <div class="log-stat-card">
+                                                    <div class="log-stat-icon today">
+                                                        <i class="fas fa-calendar-day"></i>
+                                                    </div>
+                                                    <div class="log-stat-info">
+                                                        <span class="log-stat-value">
+                                                            <%= stats.todayClicks %>
+                                                        </span>
+                                                        <span class="log-stat-label">Bugünkü Tıklama</span>
+                                                    </div>
+                                                </div>
+                                                <div class="log-stat-card">
+                                                    <div class="log-stat-icon success">
+                                                        <i class="fas fa-sign-in-alt"></i>
+                                                    </div>
+                                                    <div class="log-stat-info">
+                                                        <span class="log-stat-value">
+                                                            <%= stats.successfulLogins %>
+                                                        </span>
+                                                        <span class="log-stat-label">Başarılı Giriş</span>
+                                                    </div>
+                                                </div>
+                                                <div class="log-stat-card">
+                                                    <div class="log-stat-icon failed">
+                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                    </div>
+                                                    <div class="log-stat-info">
+                                                        <span class="log-stat-value">
+                                                            <%= stats.failedLogins %>
+                                                        </span>
+                                                        <span class="log-stat-label">Başarısız Giriş</span>
+                                                    </div>
+                                                </div>
+                                                <div class="log-stat-card">
+                                                    <div class="log-stat-icon unique">
+                                                        <i class="fas fa-network-wired"></i>
+                                                    </div>
+                                                    <div class="log-stat-info">
+                                                        <span class="log-stat-value">
+                                                            <%= stats.uniqueIPs %>
+                                                        </span>
+                                                        <span class="log-stat-label">Benzersiz IP</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Filtreler -->
+                                            <div class="card filter-card">
+                                                <form action="/hradmin/logs" method="GET" class="filter-form">
+                                                    <div class="filter-group">
+                                                        <label><i class="fas fa-filter"></i> Log Tipi</label>
+                                                        <select name="type">
+                                                            <option value="all" <%=filters.type==='all' ? 'selected'
+                                                                : '' %>>Tümü</option>
+                                                            <option value="click" <%=filters.type==='click' ? 'selected'
+                                                                : '' %>>Tıklamalar</option>
+                                                            <option value="auth" <%=filters.type==='auth' ? 'selected'
+                                                                : '' %>>Giriş/Çıkış</option>
+                                                            <option value="activity" <%=filters.type==='activity'
+                                                                ? 'selected' : '' %>>Aktiviteler</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="filter-group">
+                                                        <label><i class="fas fa-search"></i> Ara</label>
+                                                        <input type="text" name="search"
+                                                            placeholder="IP, slug, tarayıcı..."
+                                                            value="<%= filters.search %>">
+                                                    </div>
+                                                    <div class="filter-group">
+                                                        <label><i class="fas fa-list-ol"></i> Limit</label>
+                                                        <select name="limit">
+                                                            <option value="50" <%=filters.limit===50 ? 'selected' : ''
+                                                                %>>50</option>
+                                                            <option value="100" <%=filters.limit===100 ? 'selected' : ''
+                                                                %>>100</option>
+                                                            <option value="250" <%=filters.limit===250 ? 'selected' : ''
+                                                                %>>250</option>
+                                                            <option value="500" <%=filters.limit===500 ? 'selected' : ''
+                                                                %>>500</option>
+                                                        </select>
+                                                    </div>
+                                                    <button type="submit" class="btn-primary">
+                                                        <i class="fas fa-search"></i> Filtrele
+                                                    </button>
+                                                </form>
+                                            </div>
+
+                                            <!-- Log Tablosu -->
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h2><i class="fas fa-list"></i> Log Kayıtları (<%= logs.length %>)
+                                                    </h2>
+                                                </div>
+                                                <div class="table-container">
+                                                    <% if (logs && logs.length> 0) { %>
+                                                        <table class="logs-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Tip</th>
+                                                                    <th>Tarih</th>
+                                                                    <th>IP</th>
+                                                                    <th>Detay</th>
+                                                                    <th>Cihaz / User Agent</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <% logs.forEach(log=> { %>
+                                                                    <tr
+                                                                        class="log-row <%= log.log_type %> <%= log.log_type === 'auth' && !log.success ? 'failed' : '' %>">
+                                                                        <td>
+                                                                            <% if (log.log_type==='click' ) { %>
+                                                                                <span class="log-type-badge click">
+                                                                                    <i class="fas fa-mouse-pointer"></i>
+                                                                                    Tıklama
+                                                                                </span>
+                                                                                <% } else if (log.log_type==='activity'
+                                                                                    ) { %>
+                                                                                    <span
+                                                                                        class="log-type-badge activity <%= log.action %>">
+                                                                                        <i
+                                                                                            class="fas fa-<%= log.action === 'create' ? 'plus' : log.action === 'update' ? 'edit' : 'trash' %>"></i>
+                                                                                        <%= log.action==='create'
+                                                                                            ? 'Oluştur' :
+                                                                                            log.action==='update'
+                                                                                            ? 'Düzenle' : 'Sil' %>
+                                                                                    </span>
+                                                                                    <% } else if (log.action==='logout'
+                                                                                        ) { %>
+                                                                                        <span
+                                                                                            class="log-type-badge logout">
+                                                                                            <i
+                                                                                                class="fas fa-sign-out-alt"></i>
+                                                                                            Çıkış
+                                                                                        </span>
+                                                                                        <% } else { %>
+                                                                                            <span
+                                                                                                class="log-type-badge login <%= log.success ? 'success' : 'failed' %>">
+                                                                                                <i
+                                                                                                    class="fas fa-<%= log.success ? 'check' : 'times' %>"></i>
+                                                                                                <%= log.success
+                                                                                                    ? 'Giriş'
+                                                                                                    : 'Başarısız' %>
+                                                                                            </span>
+                                                                                            <% } %>
+                                                                        </td>
+                                                                        <td class="log-date">
+                                                                            <%= new
+                                                                                Date(log.created_at).toLocaleString('tr-TR')
+                                                                                %>
+                                                                        </td>
+                                                                        <td class="log-ip">
+                                                                            <code><%= log.ip %></code>
+                                                                        </td>
+                                                                        <td class="log-detail">
+                                                                            <% if (log.log_type==='click' ) { %>
+                                                                                <div class="log-detail-content">
+                                                                                    <strong>/<%= log.slug %>
+                                                                                    </strong>
+                                                                                    <% if (log.referer) { %>
+                                                                                        <small>Referrer: <%=
+                                                                                                log.referer.substring(0,
+                                                                                                50) %>
+                                                                                                <%= log.referer.length>
+                                                                                                    50 ? '...' : ''
+                                                                                                    %></small>
+                                                                                        <% } %>
+                                                                                </div>
+                                                                                <% } else if (log.log_type==='activity'
+                                                                                    ) { %>
+                                                                                    <div class="log-detail-content">
+                                                                                        <strong>
+                                                                                            <%= log.category==='link'
+                                                                                                ? 'Link' :
+                                                                                                log.category==='user'
+                                                                                                ? 'Kullanıcı'
+                                                                                                : 'Ayarlar' %>: <%=
+                                                                                                    log.target_name
+                                                                                                    || 'N/A' %>
+                                                                                        </strong>
+                                                                                        <small>
+                                                                                            <%= log.details || '' %>
+                                                                                        </small>
+                                                                                        <small class="log-user">İşlemi
+                                                                                            yapan: <%= log.username %>
+                                                                                        </small>
+                                                                                    </div>
+                                                                                    <% } else { %>
+                                                                                        <div class="log-detail-content">
+                                                                                            <strong>
+                                                                                                <%= log.username
+                                                                                                    || 'Bilinmiyor' %>
+                                                                                            </strong>
+                                                                                        </div>
+                                                                                        <% } %>
+                                                                        </td>
+                                                                        <td class="log-device">
+                                                                            <% if (log.log_type==='click' ) { %>
+                                                                                <span class="device-info">
+                                                                                    <i
+                                                                                        class="fas fa-<%= log.device_type === 'Mobile' ? 'mobile-alt' : 'desktop' %>"></i>
+                                                                                    <%= log.browser || 'Unknown' %>
+                                                                                        /
+                                                                                        <%= log.os || 'Unknown' %>
+                                                                                </span>
+                                                                                <% } else { %>
+                                                                                    <small class="user-agent"
+                                                                                        title="<%= log.user_agent %>">
+                                                                                        <%= log.user_agent ?
+                                                                                            log.user_agent.substring(0,
+                                                                                            60) + '...' : 'N/A' %>
+                                                                                    </small>
+                                                                                    <% } %>
+                                                                        </td>
+                                                                    </tr>
+                                                                    <% }); %>
+                                                            </tbody>
+                                                        </table>
+                                                        <% } else { %>
+                                                            <p class="empty-state">
+                                                                <i class="fas fa-inbox"></i><br>
+                                                                Henüz log kaydı yok
+                                                            </p>
+                                                            <% } %>
+                                                </div>
+                                            </div>
+
+                                            <% } else if (page==='settings' ) { %>
+                                                <!-- Settings Page -->
+                                                <div class="page-header">
+                                                    <h1>Ayarlar</h1>
+                                                    <p>Sistem ayarlarını yapılandırın</p>
+                                                </div>
+
+                                                <div class="settings-grid">
+                                                    <div class="card">
+                                                        <div class="card-header">
+                                                            <h2><i class="fas fa-external-link-alt"></i> Varsayılan
+                                                                Yönlendirme</h2>
+                                                        </div>
+                                                        <form action="/hradmin/settings" method="POST"
+                                                            class="card-body">
+                                                            <p class="setting-desc">Olmayan linkler bu adrese
+                                                                yönlendirilir</p>
+                                                            <div class="input-group">
+                                                                <i class="fas fa-globe"></i>
+                                                                <input type="url" name="defaultRedirect"
+                                                                    value="<%= settings.defaultRedirect %>"
+                                                                    placeholder="https://example.com">
+                                                            </div>
+                                                            <button type="submit" class="btn-primary">
+                                                                <i class="fas fa-save"></i>
+                                                                Kaydet
+                                                            </button>
+                                                        </form>
+                                                    </div>
+
+                                                    <div class="card">
+                                                        <div class="card-header">
+                                                            <h2><i class="fas fa-info-circle"></i> Sistem Bilgisi
+                                                            </h2>
+                                                        </div>
+                                                        <div class="card-body">
+                                                            <div class="info-row">
+                                                                <span><i class="fas fa-code-branch"></i>
+                                                                    Versiyon</span>
+                                                                <strong>1.0.0</strong>
+                                                            </div>
+                                                            <div class="info-row">
+                                                                <span><i class="fas fa-server"></i> Node.js</span>
+                                                                <strong>v<%= process.version.slice(1) %></strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <% } %>
+        </main>
+    </div>
+
+    <script>
+        function copyLink(slug) {
+            const fullUrl = 'https://go.hunterrockmedya.com/' + slug;
+            navigator.clipboard.writeText(fullUrl).then(() => {
+                alert('Link kopyalandı: ' + fullUrl);
+            });
+        }
+
+        // Log Modal fonksiyonları
+        const loadedLogs = {};
+
+        async function openLogModal(linkId, slug) {
+            const modal = document.getElementById('logModal');
+            const modalBody = document.getElementById('logModalBody');
+            const modalTitle = document.getElementById('logModalTitle');
+
+            modalTitle.textContent = '/' + slug + ' Logları';
+            modal.classList.add('active');
+            modalBody.innerHTML = '<div class="log-loading"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</div>';
+
+            try {
+                const response = await fetch('/hradmin/api/logs/' + linkId);
+                const logs = await response.json();
+                loadedLogs[linkId] = logs;
+                renderLogsInModal(logs);
+            } catch (err) {
+                modalBody.innerHTML = '<div class="log-error"><i class="fas fa-exclamation-circle"></i> Loglar yüklenemedi</div>';
+            }
+        }
+
+        function closeLogModal() {
+            document.getElementById('logModal').classList.remove('active');
+        }
+
+        function renderLogsInModal(logs) {
+            const modalBody = document.getElementById('logModalBody');
+
+            if (logs.length === 0) {
+                modalBody.innerHTML = '<div class="log-empty"><i class="fas fa-inbox"></i><br>Henüz tıklama yok</div>';
+                return;
+            }
+
+            let html = '<div class="log-stats">';
+            html += '<div class="log-stat"><span class="log-stat-value">' + logs.length + '</span><span class="log-stat-label">Toplam Log</span></div>';
+
+            // Cihaz istatistikleri
+            const devices = {};
+            logs.forEach(log => {
+                devices[log.device_type] = (devices[log.device_type] || 0) + 1;
+            });
+            html += '<div class="log-stat"><span class="log-stat-value">' + (devices['Desktop'] || 0) + '</span><span class="log-stat-label">Desktop</span></div>';
+            html += '<div class="log-stat"><span class="log-stat-value">' + (devices['Mobile'] || 0) + '</span><span class="log-stat-label">Mobile</span></div>';
+            html += '</div>';
+
+            html += '<div class="log-list">';
+
+            logs.forEach((log, index) => {
+                const date = new Date(log.created_at).toLocaleString('tr-TR');
+                html += `
+                    <div class="log-item" onclick="toggleLogDetailModal(${index})">
+                        <div class="log-summary">
+                            <span class="log-device-icon">
+                                <i class="fas fa-${log.device_type === 'Mobile' ? 'mobile-alt' : log.device_type === 'Tablet' ? 'tablet-alt' : log.device_type === 'Bot' ? 'robot' : 'desktop'}"></i>
+                            </span>
+                            <span class="log-browser">${log.browser || 'Unknown'}</span>
+                            <span class="log-os">${log.os || 'Unknown'}</span>
+                            <span class="log-ip">${log.ip}</span>
+                            <span class="log-date">${date}</span>
+                            <span class="log-expand"><i class="fas fa-chevron-down" id="logIcon-${index}"></i></span>
+                        </div>
+                        <div class="log-detail" id="logDetailModal-${index}" style="display: none;">
+                            <div class="log-detail-row"><strong>IP Adresi:</strong> ${log.ip}</div>
+                            <div class="log-detail-row"><strong>Geldiği Sayfa:</strong> ${log.referer || 'Doğrudan giriş'}</div>
+                            <div class="log-detail-row"><strong>Tarayıcı:</strong> ${log.browser} ${log.browser_version}</div>
+                            <div class="log-detail-row"><strong>İşletim Sistemi:</strong> ${log.os} ${log.os_version}</div>
+                            <div class="log-detail-row"><strong>Cihaz Tipi:</strong> ${log.device_type}</div>
+                            <div class="log-detail-row"><strong>Dil:</strong> ${log.language}</div>
+                            <div class="log-detail-row"><strong>User-Agent:</strong><br><small>${log.user_agent}</small></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            modalBody.innerHTML = html;
+        }
+
+        function toggleLogDetailModal(index) {
+            const detail = document.getElementById('logDetailModal-' + index);
+            const icon = document.getElementById('logIcon-' + index);
+            const isVisible = detail.style.display !== 'none';
+
+            detail.style.display = isVisible ? 'none' : 'block';
+            icon.className = isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+        }
+
+        // Modal dışına tıklayınca kapat
+        document.getElementById('logModal')?.addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeLogModal();
+            }
+        });
+
+        // Edit Modal fonksiyonları
+        function openEditModal(id, slug, targetUrl, title) {
+            document.getElementById('editLinkId').value = id;
+            document.getElementById('editSlug').value = decodeURIComponent(slug);
+            document.getElementById('editTargetUrl').value = decodeURIComponent(targetUrl);
+            document.getElementById('editTitle').value = decodeURIComponent(title || '');
+            document.getElementById('editLinkForm').action = '/hradmin/links/' + id + '/edit';
+            document.getElementById('editLinkModal').classList.add('active');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editLinkModal').classList.remove('active');
+        }
+
+        // Edit butonlarına event listener ekle
+        document.querySelectorAll('.edit-link-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                openEditModal(
+                    this.dataset.id,
+                    this.dataset.slug,
+                    this.dataset.url,
+                    this.dataset.title
+                );
+            });
+        });
+
+        // Edit modal dışına tıklayınca kapat
+        document.getElementById('editLinkModal')?.addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+        // Password Modal fonksiyonları
+        function openPasswordModal(userId, username) {
+            document.getElementById('passwordForm').action = '/hradmin/users/' + userId + '/password';
+            document.getElementById('passwordModalUser').innerHTML = '<strong>' + username + '</strong> kullanıcısı için yeni şifre:';
+            document.getElementById('passwordModal').classList.add('active');
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.remove('active');
+        }
+
+        // Password butonlarına event listener ekle
+        document.querySelectorAll('.password-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                openPasswordModal(this.dataset.id, this.dataset.username);
+            });
+        });
+
+        // Password modal dışına tıklayınca kapat
+        document.getElementById('passwordModal')?.addEventListener('click', function (e) {
+            if (e.target === this) {
+                closePasswordModal();
+            }
+        });
+
+        // Auto-hide alerts
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(el => el.remove());
+        }, 5000);
+    </script>
+</body>
+
+</html>
