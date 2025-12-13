@@ -77,4 +77,4 @@ MIT License - Serbestçe kullanabilir, değiştirebilir ve dağıtabilirsiniz.
 
 ---
 
-Made with ❤️ by [HunterRock Medya](https://hunterrockmedya.com)
+Made with ❤️ by [Hunterrock](https://hunterrockmedya.com)
