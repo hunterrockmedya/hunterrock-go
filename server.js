@@ -520,6 +520,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
             res.render('dashboard', {
                 page: 'overview',
+                domain: DOMAIN,
                 stats: {
                     linkCount: linkCount.count,
                     totalClicks: totalClicks.total,
@@ -529,7 +530,7 @@ app.use(express.static(path.join(__dirname, 'public')));
                 error: res.locals.error
             });
         } catch (err) {
-            res.render('dashboard', { page: 'overview', stats: { linkCount: 0, totalClicks: 0, topLinks: [] }, success: null, error: 'Veri yüklenemedi' });
+            res.render('dashboard', { page: 'overview', domain: DOMAIN, stats: { linkCount: 0, totalClicks: 0, topLinks: [] }, success: null, error: 'Veri yüklenemedi' });
         }
     });
 
@@ -539,12 +540,13 @@ app.use(express.static(path.join(__dirname, 'public')));
             const links = await dbAll('SELECT * FROM links ORDER BY created_at DESC');
             res.render('dashboard', {
                 page: 'links',
+                domain: DOMAIN,
                 links,
                 success: res.locals.success,
                 error: res.locals.error
             });
         } catch (err) {
-            res.render('dashboard', { page: 'links', links: [], success: null, error: 'Linkler yüklenemedi' });
+            res.render('dashboard', { page: 'links', domain: DOMAIN, links: [], success: null, error: 'Linkler yüklenemedi' });
         }
     });
 
@@ -554,13 +556,14 @@ app.use(express.static(path.join(__dirname, 'public')));
             const users = await dbAll('SELECT id, username, role, created_at, last_login FROM users ORDER BY created_at DESC');
             res.render('dashboard', {
                 page: 'users',
+                domain: DOMAIN,
                 users,
                 currentUserId: req.session.userId,
                 success: res.locals.success,
                 error: res.locals.error
             });
         } catch (err) {
-            res.render('dashboard', { page: 'users', users: [], currentUserId: null, success: null, error: 'Kullanıcılar yüklenemedi' });
+            res.render('dashboard', { page: 'users', domain: DOMAIN, users: [], currentUserId: null, success: null, error: 'Kullanıcılar yüklenemedi' });
         }
     });
 
@@ -642,6 +645,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
             res.render('dashboard', {
                 page: 'logs',
+                domain: DOMAIN,
                 logs: allLogs,
                 stats,
                 filters: { type: logType, limit, search },
@@ -652,6 +656,7 @@ app.use(express.static(path.join(__dirname, 'public')));
             console.error('Logs error:', err);
             res.render('dashboard', {
                 page: 'logs',
+                domain: DOMAIN,
                 logs: [],
                 stats: { totalClicks: 0, totalLogins: 0, successfulLogins: 0, failedLogins: 0, totalActivities: 0, todayClicks: 0, uniqueIPs: 0 },
                 filters: { type: 'all', limit: 100, search: '' },
@@ -826,6 +831,7 @@ app.use(express.static(path.join(__dirname, 'public')));
         const users = await dbAll('SELECT id, username, role, created_at, last_login FROM users ORDER BY created_at DESC');
         res.render('dashboard', {
             page: 'settings',
+            domain: DOMAIN,
             settings: { defaultRedirect },
             users,
             currentUserId: req.session.userId,
@@ -1025,7 +1031,7 @@ app.use(express.static(path.join(__dirname, 'public')));
         }
 
         const defaultRedirect = await getSetting('defaultRedirect');
-        res.redirect(301, defaultRedirect || process.env.APP_URL);
+        res.redirect(301, defaultRedirect || process.env.DOMAIN);
     });
 
     // ============================================
@@ -1039,8 +1045,8 @@ app.use(express.static(path.join(__dirname, 'public')));
     // SUNUCUYU BAŞLAT
     // ============================================
     app.listen(PORT, () => {
-        console.log(`🚀 HunterRock GO çalışıyor: ${process.env.APP_URL}`);
-        console.log(`📊 Admin Panel: ${process.env.APP_URL}/hradmin`);
+        console.log(`🚀 Hunterrock GO çalışıyor: ${process.env.DOMAIN}`);
+        console.log(`📊 Admin Panel: ${process.env.DOMAIN}/hradmin`);
         console.log(`💾 Veritabanı: SQLite (hrgo.db)`);
         console.log(`🔒 Güvenlik: Helmet + Rate Limit + Bcrypt + Session Token`);
     });

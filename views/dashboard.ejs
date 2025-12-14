@@ -269,7 +269,10 @@
                                                 <div class="form-group">
                                                     <label for="slug">Kısa İsim</label>
                                                     <div class="input-with-prefix">
-                                                        <span class="prefix">go.hunterrockmedya.com/</span>
+                                                        <span class="prefix">
+                                                            <%= domain.replace('https://', '' ).replace('http://', '' )
+                                                                %>/
+                                                        </span>
                                                         <input type="text" name="slug" id="slug" placeholder="ornek"
                                                             required>
                                                     </div>
@@ -329,7 +332,10 @@
                                                 <div class="form-group">
                                                     <label for="editSlug">Kısa İsim</label>
                                                     <div class="input-with-prefix">
-                                                        <span class="prefix">go.hunterrockmedya.com/</span>
+                                                        <span class="prefix">
+                                                            <%= domain.replace('https://', '' ).replace('http://', '' )
+                                                                %>/
+                                                        </span>
                                                         <input type="text" name="slug" id="editSlug" required>
                                                     </div>
                                                     <small>Sadece harf, rakam, tire ve alt çizgi kullanın</small>
@@ -797,8 +803,11 @@
     </div>
 
     <script>
+        // Domain değişkeni - sunucudan gelir
+        const SITE_DOMAIN = '<%= domain %>';
+
         function copyLink(slug) {
-            const fullUrl = 'https://go.hunterrockmedya.com/' + slug;
+            const fullUrl = SITE_DOMAIN + '/' + slug;
             navigator.clipboard.writeText(fullUrl).then(() => {
                 alert('Link kopyalandı: ' + fullUrl);
             });
