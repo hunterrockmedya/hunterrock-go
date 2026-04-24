@@ -1,0 +1,30 @@
+{
+    "name": "hunterrock-go",
+    "version": "1.0.1",
+    "description": "Hunterrock Link Kısaltma Sistemi",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node server.js",
+        "setup": "node setup.js"
+    },
+    "dependencies": {
+        "bcryptjs": "^2.4.3",
+        "cookie-parser": "^1.4.6",
+        "dotenv": "^16.3.1",
+        "ejs": "^3.1.9",
+        "express": "^4.21.2",
+        "express-rate-limit": "^7.1.5",
+        "helmet": "^7.1.0",
+        "jsonwebtoken": "^9.0.2",
+        "sqlite3": "^6.0.1",
+        "xss": "^1.0.15"
+    },
+    "author": "Hunterrock",
+    "license": "MIT",
+    "overrides": {
+        "tar": "^6.2.1",
+        "@tootallnate/once": "^3.0.1",
+        "http-proxy-agent": "^7.0.0"
+    }
+}
