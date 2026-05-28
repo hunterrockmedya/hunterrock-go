@@ -1,5 +1,6 @@
 const fs = require('fs');
-const envPath = require('path').join(__dirname, '.env');
+const path = require('path');
+const envPath = './.env';
 
 if (!fs.existsSync(envPath)) {
     console.log('');
@@ -14,7 +15,12 @@ if (!fs.existsSync(envPath)) {
 require('dotenv').config();
 
 const requiredEnvs = ['SESSION_SECRET', 'DOMAIN', 'PORT'];
-const missingEnvs = requiredEnvs.filter(env => !process.env[env]);
+const missingEnvs = requiredEnvs.filter(env => {
+    if (env === 'SESSION_SECRET') return !process.env.SESSION_SECRET;
+    if (env === 'DOMAIN') return !process.env.DOMAIN;
+    if (env === 'PORT') return !process.env.PORT;
+    return true;
+});
 
 if (missingEnvs.length > 0) {
     console.error(`\n❌ KRİTİK HATA: Eksik çevre değişkenleri bulundu: ${missingEnvs.join(', ')}`);
@@ -27,7 +33,6 @@ const serverSecret = process.env.SESSION_SECRET;
 const express = require('express');
 
 const cookieParser = require('cookie-parser');
-const path = require('path');
 const crypto = require('crypto');
 const xss = require('xss');
 const sqlite3 = require('sqlite3').verbose();
@@ -36,6 +41,38 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const https = require('https');
 const http = require('http');
+function sanitizeLog(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[\r\n\t]/g, '_');
+}
+
+function escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getSecureCookieOptions(extra = {}) {
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        ...extra
+    };
+}
+
+function safeLocalRedirect(res, target, defaultPath = '/hradmin') {
+    if (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')) {
+        return res.redirect(target);
+    }
+    return res.redirect(defaultPath);
+}
+
 const geoRequestQueue = [];
 const pendingGeoRequests = new Map();
 let isProcessingGeoQueue = false;
@@ -64,7 +101,7 @@ async function processGeoQueue() {
                                 ll: (data.latitude && data.longitude) ? `${data.latitude},${data.longitude}` : null
                             };
 
-                            console.log(`✅ GeoIP Başarılı [${ip}]: ${geo.city}, ${geo.country}`);
+                            console.log(`✅ GeoIP Başarılı [${sanitizeLog(ip)}]: ${sanitizeLog(geo.city)}, ${sanitizeLog(geo.country)}`);
 
                             await dbRun(`
                                 INSERT INTO ip_cache (ip, country, country_code, city, region, timezone, ll, updated_at)
@@ -83,7 +120,7 @@ async function processGeoQueue() {
 
                             resolve(geo);
                         } else {
-                            console.warn(`⚠️ GeoIP API Hatası [${ip}]:`, data?.message || 'Bilinmeyen hata');
+                            console.warn(`⚠️ GeoIP API Hatası [${sanitizeLog(ip)}]:`, sanitizeLog(data?.message || 'Bilinmeyen hata'));
                             resolve({});
                         }
                     } catch (e) {
@@ -91,11 +128,11 @@ async function processGeoQueue() {
                     }
                 });
             }).on("error", (err) => {
-                console.error(`❌ GeoIP HTTPS Hatası [${ip}]:`, err.message);
+                console.error(`❌ GeoIP HTTPS Hatası [${sanitizeLog(ip)}]:`, sanitizeLog(err.message));
                 resolve({});
             });
         } catch (err) {
-            console.error(`❌ GeoIP Kuyruk Hatası [${ip}]:`, err.message);
+            console.error(`❌ GeoIP Kuyruk Hatası [${sanitizeLog(ip)}]:`, sanitizeLog(err.message));
             resolve({});
         }
 
@@ -202,16 +239,15 @@ const loginLimiter = rateLimit({
 });
 
 app.use(generalLimiter);
-
 // ============================================
 // GÜVENLİK - Başarısız Giriş Loglama
 // ============================================
 function logFailedLogin(ip, username) {
-    console.log(`⚠️  Başarısız giriş denemesi: IP=${ip}, Kullanıcı=${username}`);
+    console.log(`⚠️  Başarısız giriş denemesi: IP=${sanitizeLog(ip)}, Kullanıcı=${sanitizeLog(username)}`);
 }
 
 function logSuccessfulLogin(ip, username) {
-    console.log(`✅ Başarılı giriş: IP=${ip}, Kullanıcı=${username}`);
+    console.log(`✅ Başarılı giriş: IP=${sanitizeLog(ip)}, Kullanıcı=${sanitizeLog(username)}`);
 }
 
 function getClientIP(req) {
@@ -410,38 +446,46 @@ app.use((req, res, next) => {
     if (!configuredDomain) return next();
 
     if (global.domainError && !req.path.startsWith('/public')) {
-        return res.status(403).send(`
+        const errorPageHtml = `
             <body style="background: #0b0c10; color: #fff; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
                 <div style="text-align: center; padding: 3rem; border: 1px solid #1f2833; border-radius: 16px; background: rgba(31, 40, 51, 0.3); max-width: 500px; backdrop-filter: blur(10px);">
                     <h1 style="color: #f59e0b; margin-top: 0; font-size: 2rem;">⚠️ Veritabanı Uyumsuzluğu</h1>
                     <p style="color: #94a3b8; line-height: 1.6; margin-bottom: 2rem;">Veritabanındaki alan adı ile sunucu yapılandırması (.env) birbiriyle uyuşmuyor. Güvenlik nedeniyle sistem kilitlendi.</p>
                     <div style="background: rgba(11, 12, 16, 0.6); padding: 20px; border-radius: 12px; text-align: left; font-family: monospace; font-size: 14px; border: 1px solid #1f2833;">
-                        <div style="color: #4facfe; margin-bottom: 8px;">📁 .env: ${global.domainError.env}</div>
-                        <div style="color: #ef4444;">🗄️ DB:   ${global.domainError.db || 'Eksik'}</div>
+                        <div style="color: #4facfe; margin-bottom: 8px;">📁 .env: ENV_VAL</div>
+                        <div style="color: #ef4444;">🗄️ DB:   DB_VAL</div>
                     </div>
                     <p style="font-size: 0.85rem; color: #64748b; margin-top: 2rem;">Lütfen veritabanındaki <b>settings</b> tablosunu veya .env dosyasını güncelleyerek değerleri eşitleyin.</p>
                 </div>
             </body>
-        `);
+        `;
+        return res.status(403).send(errorPageHtml
+            .replace('ENV_VAL', escapeHtml(global.domainError.env))
+            .replace('DB_VAL', escapeHtml(global.domainError.db || 'Eksik'))
+        );
     }
 
     const cleanConfigured = configuredDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
     const currentHost = req.get('host').toLowerCase().split(':')[0];
 
     if (currentHost !== cleanConfigured && !req.path.startsWith('/public') && !req.path.startsWith('/hradmin/setup')) {
-        return res.status(403).send(`
+        const mismatchPageHtml = `
             <body style="background: #0b0c10; color: #fff; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
                 <div style="text-align: center; padding: 3rem; border: 1px solid #1f2833; border-radius: 16px; background: rgba(31, 40, 51, 0.3); max-width: 500px; backdrop-filter: blur(10px);">
                     <h1 style="color: #ef4444; margin-top: 0; font-size: 2rem;">🛑 Alan Adı Uyumsuzluğu</h1>
                     <p style="color: #94a3b8; line-height: 1.6; margin-bottom: 2rem;">Bu uygulama sadece yetkili alan adı üzerinden çalışabilir. Mevcut yapılandırma ile erişim sağladığınız adres eşleşmiyor.</p>
                     <div style="background: rgba(11, 12, 16, 0.6); padding: 20px; border-radius: 12px; text-align: left; font-family: monospace; font-size: 14px; border: 1px solid #1f2833;">
-                        <div style="color: #4facfe; margin-bottom: 8px;">✔ Beklenen: ${cleanConfigured}</div>
-                        <div style="color: #ef4444;">✖ Mevcut: ${currentHost}</div>
+                        <div style="color: #4facfe; margin-bottom: 8px;">✔ Beklenen: BEKLENEN_VAL</div>
+                        <div style="color: #ef4444;">✖ Mevcut: MEVCUT_VAL</div>
                     </div>
                     <p style="font-size: 0.85rem; color: #64748b; margin-top: 2rem;">Eğer sunucu değişikliği yaptıysanız lütfen .env dosyanızı güncelleyin.</p>
                 </div>
             </body>
-        `);
+        `;
+        return res.status(403).send(mismatchPageHtml
+            .replace('BEKLENEN_VAL', escapeHtml(cleanConfigured))
+            .replace('MEVCUT_VAL', escapeHtml(currentHost))
+        );
     }
     next();
 });
@@ -611,7 +655,13 @@ function sanitizeObject(obj) {
     if (typeof obj === 'object' && obj !== null) {
         const sanitized = {};
         for (const key in obj) {
-            sanitized[key] = sanitizeObject(obj[key]);
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                    continue;
+                }
+                const val = Reflect.get(obj, key);
+                Reflect.set(sanitized, key, sanitizeObject(val));
+            }
         }
         return sanitized;
     }
@@ -629,7 +679,7 @@ const generateCsrfToken = () => crypto.randomBytes(32).toString('hex');
 
 app.use((req, res, next) => {
     if (!req.cookies.csrf_token) {
-        res.cookie('csrf_token', generateCsrfToken(), { httpOnly: true, path: '/' });
+        res.cookie('csrf_token', generateCsrfToken(), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.locals.csrfToken = req.cookies.csrf_token || '';
@@ -645,7 +695,7 @@ app.use((req, res, next) => {
     const submittedToken = req.body._csrf || req.headers['x-csrf-token'];
 
     if (!submittedToken || submittedToken !== req.cookies.csrf_token) {
-        console.warn(`🚫 CSRF Engellendi: IP=${getClientIP(req)}, URL=${req.url}`);
+        console.warn(`🚫 CSRF Engellendi: IP=${sanitizeLog(getClientIP(req))}, URL=${sanitizeLog(req.url)}`);
         return res.status(403).json({ error: 'Güvenlik doğrulaması başarısız (CSRF)' });
     }
 
@@ -665,7 +715,7 @@ async function requireAuth(req, res, next) {
         const user = await dbGet('SELECT * FROM users WHERE id = ?', [decoded.userId]);
 
         if (!user) {
-            console.warn(`⚠️ JWT Geçersiz: Kullanıcı silinmiş veya bulunamadı (ID: ${decoded.userId})`);
+            console.warn(`⚠️ JWT Geçersiz: Kullanıcı silinmiş veya bulunamadı (ID: ${sanitizeLog(String(decoded.userId))})`);
             res.clearCookie('auth_token');
             return res.redirect('/hradmin/login');
         }
@@ -682,7 +732,7 @@ async function requireAuth(req, res, next) {
 
         return next();
     } catch (err) {
-        console.warn('⚠️ JWT Geçersiz:', err.message);
+        console.warn('⚠️ JWT Geçersiz:', sanitizeLog(err.message));
         res.clearCookie('auth_token');
         return res.redirect('/hradmin/login');
     }
@@ -692,7 +742,7 @@ function requireAdmin(req, res, next) {
     if (req.user && req.user.userRole === 'admin') {
         return next();
     }
-    res.cookie('flash_error', 'Bu sayfaya erişim yetkiniz yok', { httpOnly: true, path: '/' });
+    res.cookie('flash_error', 'Bu sayfaya erişim yetkiniz yok', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     res.redirect('/hradmin');
 }
 
@@ -731,7 +781,7 @@ function requireAjax(req, res, next) {
         return next();
     }
 
-    console.log(`🚫 API Erişimi Engellendi: Ajax=${isAjax}, Referer=${referer}, Origin=${origin}`);
+    console.log(`🚫 API Erişimi Engellendi: Ajax=${isAjax}, Referer=${sanitizeLog(referer)}, Origin=${sanitizeLog(origin)}`);
     return res.status(403).json({ error: 'Erişim engellendi' });
 }
 
@@ -791,19 +841,14 @@ app.post('/hradmin/login', loginLimiter, async (req, res) => {
                     userRole: user.role
                 }, serverSecret, { expiresIn: '30d' });
 
-                res.cookie('auth_token', token, {
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    maxAge: 30 * 24 * 60 * 60 * 1000,
-                    sameSite: 'strict'
-                });
+                res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'strict', path: '/' });
 
                 await dbRun('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
 
                 logSuccessfulLogin(clientIP, username);
                 await dbRun('INSERT INTO login_logs (ip, username, action, success, user_agent) VALUES (?, ?, ?, 1, ?)', [clientIP, username, 'login', userAgent]);
 
-                getGeoInfo(clientIP).catch(e => console.error('Login GeoIP Hatası:', e.message));
+                getGeoInfo(clientIP).catch(e => console.error('Login GeoIP Hatası:', sanitizeLog(e.message)));
 
                 return res.redirect('/hradmin');
             }
@@ -812,11 +857,11 @@ app.post('/hradmin/login', loginLimiter, async (req, res) => {
         logFailedLogin(clientIP, username || 'empty');
         await dbRun('INSERT INTO login_logs (ip, username, action, success, user_agent) VALUES (?, ?, ?, 0, ?)', [clientIP, username || 'empty', 'login', userAgent]);
 
-        res.cookie('flash_error', 'Hatalı kullanıcı adı veya şifre', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Hatalı kullanıcı adı veya şifre', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         res.redirect('/hradmin/login');
     } catch (err) {
-        console.error('Login error:', err);
-        res.cookie('flash_error', 'Giriş sırasında bir hata oluştu', { httpOnly: true, path: '/' });
+        console.error('Login error:', sanitizeLog(err.message || String(err)));
+        res.cookie('flash_error', 'Giriş sırasında bir hata oluştu', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         res.redirect('/hradmin/login');
     }
 });
@@ -956,7 +1001,7 @@ app.get('/hradmin/logs', requireAuth, requireAdmin, async (req, res) => {
         if (pageNum < 1 || (totalPages > 0 && pageNum > totalPages)) {
             const safePage = pageNum < 1 ? 1 : totalPages;
             const q = new URLSearchParams({ type: logType, search, limit, page: safePage });
-            return res.redirect('/hradmin/logs?' + q.toString());
+            return safeLocalRedirect(res, '/hradmin/logs?' + q.toString());
         }
 
         const offset = (pageNum - 1) * limit;
@@ -1062,40 +1107,40 @@ app.post('/hradmin/links', requireAuth, requireAdmin, async (req, res) => {
     const { slug, targetUrl, title } = req.body;
 
     if (!slug || !targetUrl) {
-        res.cookie('flash_error', 'Slug ve hedef URL gerekli', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Slug ve hedef URL gerekli', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/links');
     }
 
     if (!isValidUrl(targetUrl) || !isSafeUrl(targetUrl)) {
-        res.cookie('flash_error', 'Geçersiz veya güvensiz URL', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz veya güvensiz URL', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/links');
     }
 
     const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-_]/g, '');
 
     if (cleanSlug.length < 1) {
-        res.cookie('flash_error', 'Geçersiz slug', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz slug', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/links');
     }
 
     const reserved = ['hradmin', 'api', 'admin', 'static', 'public', 'login', 'logout'];
     if (reserved.includes(cleanSlug)) {
-        res.cookie('flash_error', 'Bu isim rezerve edilmiş', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Bu isim rezerve edilmiş', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/links');
     }
 
     try {
         const existing = await dbGet('SELECT * FROM links WHERE slug = ?', [cleanSlug]);
         if (existing) {
-            res.cookie('flash_error', 'Bu kısa isim zaten kullanılıyor', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Bu kısa isim zaten kullanılıyor', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/links');
         }
 
         const result = await dbRun('INSERT INTO links (slug, target_url, title) VALUES (?, ?, ?)', [cleanSlug, targetUrl, title || '']);
         await logActivity(req, 'create', 'link', 'link', result.lastID, cleanSlug, `Hedef: ${targetUrl}`);
-        res.cookie('flash_success', 'Link oluşturuldu', { httpOnly: true, path: '/' });
+        res.cookie('flash_success', 'Link oluşturuldu', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     } catch (err) {
-        res.cookie('flash_error', 'Link oluşturulamadı', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Link oluşturulamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/links');
@@ -1105,18 +1150,18 @@ app.get('/hradmin/links/:id/edit', requireAuth, requireAdmin, async (req, res) =
     try {
         const id = parseInt(req.params.id);
         if (isNaN(id)) {
-            res.cookie('flash_error', 'Geçersiz link ID', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Geçersiz link ID', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/links');
         }
 
         const link = await dbGet('SELECT * FROM links WHERE id = ?', [id]);
         if (!link) {
-            res.cookie('flash_error', 'Link bulunamadı', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Link bulunamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/links');
         }
         res.render('edit-link', { link });
     } catch (err) {
-        res.cookie('flash_error', 'Link yüklenemedi', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Link yüklenemedi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         res.redirect('/hradmin/links');
     }
 });
@@ -1126,19 +1171,19 @@ app.post('/hradmin/links/:id/edit', requireAuth, requireAdmin, async (req, res) 
     const id = parseInt(req.params.id);
 
     if (isNaN(id)) {
-        res.cookie('flash_error', 'Geçersiz link ID', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz link ID', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/links');
     }
 
     if (!isValidUrl(targetUrl) || !isSafeUrl(targetUrl)) {
-        res.cookie('flash_error', 'Geçersiz veya güvensiz URL', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz veya güvensiz URL', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect(`/hradmin/links/${id}/edit`);
     }
 
     try {
         const link = await dbGet('SELECT * FROM links WHERE id = ?', [id]);
         if (!link) {
-            res.cookie('flash_error', 'Link bulunamadı', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Link bulunamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/links');
         }
 
@@ -1146,21 +1191,21 @@ app.post('/hradmin/links/:id/edit', requireAuth, requireAdmin, async (req, res) 
         const reserved = ['hradmin', 'api', 'admin', 'static', 'public', 'login', 'logout'];
 
         if (reserved.includes(cleanSlug)) {
-            res.cookie('flash_error', 'Bu isim rezerve edilmiş', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Bu isim rezerve edilmiş', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect(`/hradmin/links/${id}/edit`);
         }
 
         const existing = await dbGet('SELECT * FROM links WHERE slug = ? AND id != ?', [cleanSlug, id]);
         if (existing) {
-            res.cookie('flash_error', 'Bu kısa isim zaten kullanılıyor', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Bu kısa isim zaten kullanılıyor', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect(`/hradmin/links/${id}/edit`);
         }
 
         await dbRun('UPDATE links SET slug = ?, target_url = ?, title = ? WHERE id = ?', [cleanSlug, targetUrl, title || '', id]);
         await logActivity(req, 'update', 'link', 'link', id, cleanSlug, `Eski: ${link.slug} -> Yeni: ${cleanSlug}`);
-        res.cookie('flash_success', 'Link güncellendi', { httpOnly: true, path: '/' });
+        res.cookie('flash_success', 'Link güncellendi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     } catch (err) {
-        res.cookie('flash_error', 'Link güncellenemedi', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Link güncellenemedi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/links');
@@ -1170,22 +1215,22 @@ app.post('/hradmin/links/:id/delete', requireAuth, requireAdmin, async (req, res
     const id = parseInt(req.params.id);
 
     if (isNaN(id)) {
-        res.cookie('flash_error', 'Geçersiz link ID', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz link ID', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/links');
     }
 
     try {
         const link = await dbGet('SELECT * FROM links WHERE id = ?', [id]);
         if (!link) {
-            res.cookie('flash_error', 'Link bulunamadı', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Link bulunamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/links');
         }
 
         await dbRun('DELETE FROM links WHERE id = ?', [id]);
         await logActivity(req, 'delete', 'link', 'link', id, link.slug, `Silinen hedef: ${link.target_url}`);
-        res.cookie('flash_success', 'Link silindi', { httpOnly: true, path: '/' });
+        res.cookie('flash_success', 'Link silindi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     } catch (err) {
-        res.cookie('flash_error', 'Link silinemedi', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Link silinemedi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/links');
@@ -1211,7 +1256,7 @@ app.post('/hradmin/settings', requireAuth, requireAdmin, async (req, res) => {
     try {
         if (newDomain) {
             if (!isValidUrl(newDomain) || !isSafeUrl(newDomain)) {
-                res.cookie('flash_error', 'Geçersiz yönlendirme URL\'si', { httpOnly: true, path: '/' });
+                res.cookie('flash_error', 'Geçersiz yönlendirme URL\'si', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
                 return res.redirect('/hradmin/settings');
             }
             await setSetting('domain', newDomain);
@@ -1224,10 +1269,10 @@ app.post('/hradmin/settings', requireAuth, requireAdmin, async (req, res) => {
             }
 
             await logActivity(req, 'update', 'settings', 'settings', null, 'domain', `Yeni değer: ${newDomain}`);
-            res.cookie('flash_success', 'Ayarlar güncellendi', { httpOnly: true, path: '/' });
+            res.cookie('flash_success', 'Ayarlar güncellendi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         }
     } catch (err) {
-        res.cookie('flash_error', 'Ayarlar güncellenemedi', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Ayarlar güncellenemedi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/settings');
@@ -1237,25 +1282,25 @@ app.post('/hradmin/users/create', requireAuth, requireAdmin, async (req, res) =>
     const { username, password, role } = req.body;
 
     if (!username || !password) {
-        res.cookie('flash_error', 'Kullanıcı adı ve şifre gerekli', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Kullanıcı adı ve şifre gerekli', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     if (password.length < 8) {
-        res.cookie('flash_error', 'Şifre en az 8 karakter olmalı', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Şifre en az 8 karakter olmalı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
     if (cleanUsername.length < 3) {
-        res.cookie('flash_error', 'Kullanıcı adı en az 3 karakter olmalı', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Kullanıcı adı en az 3 karakter olmalı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     try {
         const existing = await dbGet('SELECT id FROM users WHERE username = ?', [cleanUsername]);
         if (existing) {
-            res.cookie('flash_error', 'Bu kullanıcı adı zaten alınmış', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Bu kullanıcı adı zaten alınmış', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/users');
         }
 
@@ -1264,10 +1309,10 @@ app.post('/hradmin/users/create', requireAuth, requireAdmin, async (req, res) =>
             [cleanUsername, hashedPassword, role || 'user']);
         await logActivity(req, 'create', 'user', 'user', result.lastID, cleanUsername, `Rol: ${role || 'user'}`);
 
-        res.cookie('flash_success', `Kullanıcı "${cleanUsername}" oluşturuldu`, { httpOnly: true, path: '/' });
+        res.cookie('flash_success', 'Kullanıcı başarıyla oluşturuldu', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     } catch (err) {
-        console.error('User create error:', err);
-        res.cookie('flash_error', 'Kullanıcı oluşturulamadı', { httpOnly: true, path: '/' });
+        console.error('User create error:', sanitizeLog(err.message || String(err)));
+        res.cookie('flash_error', 'Kullanıcı oluşturulamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/users');
@@ -1277,34 +1322,34 @@ app.post('/hradmin/users/:id/delete', requireAuth, requireAdmin, async (req, res
     const userId = parseInt(req.params.id);
 
     if (isNaN(userId)) {
-        res.cookie('flash_error', 'Geçersiz kullanıcı ID', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz kullanıcı ID', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     if (userId === req.user.userId) {
-        res.cookie('flash_error', 'Kendinizi silemezsiniz', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Kendinizi silemezsiniz', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     try {
         const user = await dbGet('SELECT * FROM users WHERE id = ?', [userId]);
         if (!user) {
-            res.cookie('flash_error', 'Kullanıcı bulunamadı', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Kullanıcı bulunamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/users');
         }
 
         const adminCount = await dbGet('SELECT COUNT(*) as count FROM users WHERE role = ?', ['admin']);
         if (user.role === 'admin' && adminCount.count <= 1) {
-            res.cookie('flash_error', 'Son admin kullanıcısını silemezsiniz', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Son admin kullanıcısını silemezsiniz', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/users');
         }
 
         await dbRun('DELETE FROM users WHERE id = ?', [userId]);
         await logActivity(req, 'delete', 'user', 'user', userId, user.username, `Rol: ${user.role}`);
-        res.cookie('flash_success', `Kullanıcı "${user.username}" silindi`, { httpOnly: true, path: '/' });
+        res.cookie('flash_success', 'Kullanıcı başarıyla silindi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     } catch (err) {
-        console.error('User delete error:', err);
-        res.cookie('flash_error', 'Kullanıcı silinemedi', { httpOnly: true, path: '/' });
+        console.error('User delete error:', sanitizeLog(err.message || String(err)));
+        res.cookie('flash_error', 'Kullanıcı silinemedi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/users');
@@ -1315,29 +1360,29 @@ app.post('/hradmin/users/:id/password', requireAuth, requireAdmin, async (req, r
     const { newPassword } = req.body;
 
     if (isNaN(userId)) {
-        res.cookie('flash_error', 'Geçersiz kullanıcı ID', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Geçersiz kullanıcı ID', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     if (!newPassword || newPassword.length < 8) {
-        res.cookie('flash_error', 'Şifre en az 8 karakter olmalı', { httpOnly: true, path: '/' });
+        res.cookie('flash_error', 'Şifre en az 8 karakter olmalı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
         return res.redirect('/hradmin/users');
     }
 
     try {
         const user = await dbGet('SELECT * FROM users WHERE id = ?', [userId]);
         if (!user) {
-            res.cookie('flash_error', 'Kullanıcı bulunamadı', { httpOnly: true, path: '/' });
+            res.cookie('flash_error', 'Kullanıcı bulunamadı', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
             return res.redirect('/hradmin/users');
         }
 
         const hashedPassword = await hashPassword(newPassword);
         await dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
         await logActivity(req, 'update', 'user', 'user', userId, user.username, 'Şifre değiştirildi');
-        res.cookie('flash_success', `"${user.username}" kullanıcısının şifresi değiştirildi`, { httpOnly: true, path: '/' });
+        res.cookie('flash_success', 'Kullanıcının şifresi başarıyla değiştirildi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     } catch (err) {
-        console.error('Password change error:', err);
-        res.cookie('flash_error', 'Şifre değiştirilemedi', { httpOnly: true, path: '/' });
+        console.error('Password change error:', sanitizeLog(err.message || String(err)));
+        res.cookie('flash_error', 'Şifre değiştirilemedi', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' });
     }
 
     res.redirect('/hradmin/users');
@@ -1374,16 +1419,16 @@ app.get('/:slug', async (req, res) => {
                     await dbRun('UPDATE links SET clicks = clicks + 1, last_clicked_at = CURRENT_TIMESTAMP WHERE id = ?', [link.id]);
 
                     const location = geo.city ? `${geo.city}, ${geo.country || '??'}` : (geo.country || 'Bilinmiyor');
-                    console.log(`🔗 Link tıklandı: /${cleanSlug} | IP: ${clientIP} | Konum: ${location}`);
+                    console.log(`🔗 Link tıklandı: /${sanitizeLog(cleanSlug)} | IP: ${sanitizeLog(clientIP)} | Konum: ${sanitizeLog(location)}`);
                 } catch (logErr) {
-                    console.error('Background logging error:', logErr);
+                    console.error('Background logging error:', sanitizeLog(logErr.message || String(logErr)));
                 }
             });
 
             return res.redirect(302, link.target_url);
         }
     } catch (err) {
-        console.error('Redirect error:', err);
+        console.error('Redirect error:', sanitizeLog(err.message || String(err)));
     }
 
     const domainSetting = await getSetting('domain');
@@ -1395,7 +1440,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error(`🔥 KRİTİK HATA (${req.method} ${req.url}):`, err.stack);
+    console.error(`🔥 KRİTİK HATA (${sanitizeLog(req.method)} ${sanitizeLog(req.url)}):`, sanitizeLog(err.stack || String(err)));
 
     if (req.xhr || req.headers.accept?.includes('application/json') || req.path.startsWith('/api/') || req.path.startsWith('/hradmin/api/')) {
         return res.status(500).json({ error: 'Sunucu tarafında beklenmeyen bir hata oluştu.' });

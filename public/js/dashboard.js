@@ -105,7 +105,10 @@ function renderLogsInModal(logs, append = false) {
             sec.appendChild(h);
             details.forEach(d => {
                 const p = document.createElement('p');
-                p.innerHTML = `<strong>${d.label}:</strong> `;
+                const strong = document.createElement('strong');
+                strong.textContent = d.label + ':';
+                p.appendChild(strong);
+                p.appendChild(document.createTextNode(' '));
                 const s = document.createElement('span');
                 s.textContent = d.val;
                 p.appendChild(s);
@@ -228,7 +231,12 @@ document.getElementById('editLinkModal')?.addEventListener('click', function (e)
 
 function openPasswordModal(userId, username) {
     document.getElementById('passwordForm').action = '/hradmin/users/' + userId + '/password';
-    document.getElementById('passwordModalUser').innerHTML = '<strong>' + escapeHtml(username) + '</strong> kullanıcısı için yeni şifre:';
+    const passwordModalUser = document.getElementById('passwordModalUser');
+    passwordModalUser.textContent = '';
+    const strong = document.createElement('strong');
+    strong.textContent = username;
+    passwordModalUser.appendChild(strong);
+    passwordModalUser.appendChild(document.createTextNode(' kullanıcısı için yeni şifre:'));
     document.getElementById('passwordModal').classList.add('active');
 }
 

@@ -11,7 +11,43 @@ const readline = require('readline');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
+
+// 1. Bağımlılıkları Kontrol Et ve Gerekirse Yükle (Self-Respawn)
+const requiredDeps = ['express', 'sqlite3', 'bcryptjs', 'jsonwebtoken'];
+let needsInstall = false;
+for (const dep of requiredDeps) {
+    try {
+        require.resolve(dep);
+    } catch (e) {
+        needsInstall = true;
+        break;
+    }
+}
+
+const nodeModulesPath = './node_modules';
+
+if (!fs.existsSync(nodeModulesPath)) {
+    needsInstall = true;
+}
+
+if (needsInstall) {
+    console.log('  ℹ️  Eksik paketler tespit edildi, yükleniyor...');
+    try {
+        execSync('npm install', { stdio: 'inherit' });
+        console.log('  ✅ Paketler başarıyla yüklendi.');
+        // Yeniden başlat
+        const result = spawnSync(process.execPath, [__filename, ...process.argv.slice(2)], { stdio: 'inherit' });
+        process.exit(result.status || 0);
+    } catch (err) {
+        console.error('  ❌ Paket yükleme hatası:', err.message);
+        process.exit(1);
+    }
+}
+
+// 2. Artık paketlerin yüklendiğinden eminiz, güvenle import edebiliriz
+const bcrypt = require('bcryptjs');
+const sqlite3 = require('sqlite3').verbose();
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -108,36 +144,11 @@ async function main() {
     // Bağımlılıkları Kontrol Et ve Yükle
     // ============================================
     console.log('── 📦 Bağımlılıklar Kontrol Ediliyor... ──────');
-
-    const checkDeps = () => {
-        try {
-            require.resolve('express');
-            require.resolve('sqlite3');
-            require.resolve('bcryptjs');
-            require.resolve('geoip-lite');
-            require.resolve('jsonwebtoken');
-            return true;
-        } catch (e) {
-            return false;
-        }
-    };
-
-    if (!checkDeps() || !fs.existsSync(path.join(__dirname, 'node_modules'))) {
-        try {
-            console.log('  ℹ️  Eksik paketler tespit edildi, yükleniyor...');
-            execSync('npm install', { stdio: 'inherit' });
-            console.log('  ✅ Paketler başarıyla yüklendi.');
-        } catch (err) {
-            console.error('  ❌ Paket yükleme hatası:', err.message);
-            console.log('  Devam ediliyor, ancak eksik paketler varsa kurulum başarısız olabilir.');
-        }
-    } else {
-        console.log('  ✅ Tüm bağımlılıklar zaten yüklü.');
-    }
+    console.log('  ✅ Tüm bağımlılıklar zaten yüklü.');
     console.log('');
 
-    const envPath = path.join(__dirname, '.env');
-    const dbPath = path.join(__dirname, 'hrgo.db');
+    const envPath = './.env';
+    const dbPath = './hrgo.db';
 
     if (fs.existsSync(envPath)) {
         const overwrite = await ask('⚠️  .env dosyası zaten mevcut. Üzerine yazmak ister misiniz? (e/h)', 'h');
@@ -261,9 +272,6 @@ DOMAIN=${domain}
     // Veritabanında Admin Kullanıcısını Oluştur
     // ============================================
     try {
-        const bcrypt = require('bcryptjs');
-        const sqlite3 = require('sqlite3').verbose();
-
         const db = new sqlite3.Database(dbPath);
 
         await new Promise((resolve, reject) => {
